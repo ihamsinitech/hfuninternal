@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+
+@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -58,7 +60,6 @@ public class AuthController {
     
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        // Call service to reset password using the token
         authService.resetPassword(request.getEmail(), request.getNewPassword(), request.getConfirmPassword());
         return ResponseEntity.ok("Password has been reset successfully");
     }
