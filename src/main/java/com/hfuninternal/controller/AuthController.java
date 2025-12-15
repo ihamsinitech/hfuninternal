@@ -30,7 +30,6 @@ public class AuthController {
         return ResponseEntity.ok(authService.getAllUsers());
     }
 
-
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
         User user = authService.login(request);
@@ -43,4 +42,25 @@ public class AuthController {
                 )
         );
     }
+
+    
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ForgotPasswordResponse> forgotPassword(
+            @RequestBody ForgotPasswordRequest request) {
+
+        authService.forgotPassword(request.getEmail());
+
+        return ResponseEntity.ok(
+            new ForgotPasswordResponse("Password reset link sent to your email")
+        );
+    }
+    
+    
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        // Call service to reset password using the token
+        authService.resetPassword(request.getEmail(), request.getNewPassword(), request.getConfirmPassword());
+        return ResponseEntity.ok("Password has been reset successfully");
+    }
+
 }

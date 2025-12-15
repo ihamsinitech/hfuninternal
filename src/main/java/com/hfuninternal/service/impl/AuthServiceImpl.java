@@ -8,6 +8,7 @@ import com.hfuninternal.repository.UserRepository;
 import com.hfuninternal.service.AuthService;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -55,14 +56,40 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Invalid email or password");
 
         return user;
-        
-        
-        
     }
-    
+
     @Override
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
+
+    @Override
+    public void forgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BadRequestException("User with email " + email + " not found"));
+
+        // Simulate sending a password reset link
+        System.out.println("Password reset link sent to: " + user.getEmail());
+
+        // In a real app, generate a token, save it in DB, and send email
+    }
+
+    // ------------------- NEW resetPassword METHOD -------------------
+   
+
+        @Override
+        public void resetPassword(String email, String newPassword, String confirmPassword) {
+            if (!newPassword.equals(confirmPassword)) {
+                throw new BadRequestException("Password and Confirm Password do not match");
+            }
+
+            User user = userRepository.findByEmail(email)
+                    .orElseThrow(() ->
+                            new BadRequestException("User with email " + email + " not found"));
+
+            user.setPassword(passwordEncoder.encode(newPassword));
+            userRepository.save(user);
+        }
+
 
 }
