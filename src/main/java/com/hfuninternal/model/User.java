@@ -24,6 +24,9 @@ public class User {
 
     @Column(nullable = false)
     private String password;
+    
+    @Column(nullable = false)
+    private String confirmPassword;
 
     @Column(nullable = false)
     private String signup;   // <-- FIXED (String type)

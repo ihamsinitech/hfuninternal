@@ -8,7 +8,6 @@ import com.hfuninternal.repository.UserRepository;
 import com.hfuninternal.service.AuthService;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -41,7 +40,6 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.getEmail());
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setSignup(request.getSignup());
         user.setFullName(request.getFullName());
 
         return userRepository.save(user);
@@ -49,7 +47,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public User login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(request.getEmailOrUsername())
                 .orElseThrow(() -> new BadRequestException("Invalid email or password"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
@@ -74,22 +72,17 @@ public class AuthServiceImpl implements AuthService {
         // In a real app, generate a token, save it in DB, and send email
     }
 
-    // ------------------- NEW resetPassword METHOD -------------------
-   
-
-        @Override
-        public void resetPassword(String email, String newPassword, String confirmPassword) {
-            if (!newPassword.equals(confirmPassword)) {
-                throw new BadRequestException("Password and Confirm Password do not match");
-            }
-
-            User user = userRepository.findByEmail(email)
-                    .orElseThrow(() ->
-                            new BadRequestException("User with email " + email + " not found"));
-
-            user.setPassword(passwordEncoder.encode(newPassword));
-            userRepository.save(user);
+    @Override
+    public void resetPassword(String email, String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword)) {
+            throw new BadRequestException("Password and Confirm Password do not match");
         }
 
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new BadRequestException("User with email " + email + " not found"));
 
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
 }
