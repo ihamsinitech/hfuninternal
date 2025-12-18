@@ -19,16 +19,36 @@ public class SecurityConfig {
 
         http
             .csrf(csrf -> csrf.disable())
-            .cors(cors -> {})
+            .cors(cors -> {}) // You can configure CORS properly if needed
             .authorizeHttpRequests(auth -> auth
+
+                // ✅ PUBLIC APIs (no login needed)
                 .requestMatchers(
                     "/api/auth/**",
-                    "/api/users/**",
-                    "/api/posts/**",
-                    "/api/reels/**",
-                    "/api/messages/**"
+                    "/api/posts/feed",
+                    "/api/reels/feed",
+                    "/api/users/*/profile",
+                    "/api/users/*/posts",
+                    "/api/users/*/reels",
+                    "/api/users/*/highlights"
                 ).permitAll()
-                .anyRequest().permitAll() // TEMP: allow everything
+
+                // ✅ AUTHENTICATED APIs (login required)
+                .requestMatchers(
+                    "/api/users/me",
+                    "/api/users/profile",
+                    "/api/users/upload-profile-picture",
+                    "/api/users/*/follow",
+                    "/api/users/*/unfollow",
+                    "/api/users/*/block",
+                    "/api/users/*/report",
+                    "/api/posts/*/like",
+                    "/api/posts/*/share",
+                    "/api/reels/*/like"
+                ).authenticated()
+
+                // ❌ Everything else blocked
+                .anyRequest().denyAll()
             );
 
         return http.build();

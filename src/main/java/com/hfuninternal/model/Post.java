@@ -1,29 +1,31 @@
 package com.hfuninternal.model;
 
-import jakarta.persistence.*;
-import lombok.*;
 import java.time.LocalDateTime;
 
+import jakarta.persistence.*;
+import lombok.*;
+
 @Entity
-@Data
+@Table(name = "posts")
+@Data   // IMPORTANT: generates getters/setters
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "posts")
 public class Post {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String imageUrl;
-    private String caption;
-
-    private int likes;
-    private int shares;
-
-    @ManyToOne
-    @JoinColumn(name = "user_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(nullable = false)
+    private String caption;
+
+    @Column(name = "media_url", nullable = false)
+    private String mediaUrl;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 }

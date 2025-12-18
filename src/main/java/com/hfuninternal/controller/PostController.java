@@ -1,11 +1,14 @@
 package com.hfuninternal.controller;
 
+import java.security.Principal;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.hfuninternal.model.Post;
+import com.hfuninternal.dto.FeedResponseDto;
+import com.hfuninternal.model.User;
+import com.hfuninternal.repository.UserRepository;
 import com.hfuninternal.service.PostService;
 
 import lombok.RequiredArgsConstructor;
@@ -16,51 +19,45 @@ import lombok.RequiredArgsConstructor;
 public class PostController {
 
     private final PostService postService;
+    private final UserRepository userRepository;
 
-    @GetMapping("/feed") 
-    //postman url down one 
-     //http://localhost:8080/api/posts/feed?page=0&limit=10
-    public ResponseEntity<?> feed(
-            @RequestParam int page,
-            @RequestParam int limit
-    ) {
-        var posts = postService.getFeed(page, limit);
+    @GetMapping("/feed")
+    public ResponseEntity<?> feed(@RequestParam int page,
+                                  @RequestParam int limit,
+                                  Principal principal) {
+        User user = userRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return ResponseEntity.ok(
-                Map.of(
-                        "success", true,
-                        "posts", posts.getContent(),
-                        "hasMore", posts.hasNext()
-                )
-        );
+        FeedResponseDto feed = postService.getFeed(page, limit, user);
+        return ResponseEntity.ok(feed);
     }
 
-    // ✅ ADD THIS
-    @PostMapping
-    public ResponseEntity<?> create(@RequestBody Post post) {
-        return ResponseEntity.ok(
-            Map.of(
-                "success", true,
-                "post", postService.create(post)
-            )
-        );
-    }
+    @PostMapping("/{postId}/like")
+    public ResponseEntity<Map<String, Boolean>> like(@PathVariable Long postId, Principal principal) {
+        User user = userRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-    @PostMapping("/{id}/like")
-    public ResponseEntity<?> like(@PathVariable Long id) {
-        postService.like(id);
+        postService.like(postId, user.getId());
         return ResponseEntity.ok(Map.of("success", true));
     }
 
-    @DeleteMapping("/{id}/like")
-    public ResponseEntity<?> unlike(@PathVariable Long id) {
-        postService.unlike(id);
+    @DeleteMapping("/{postId}/like")
+    public ResponseEntity<Map<String, Boolean>> unlike(@PathVariable Long postId, Principal principal) {
+        User user = userRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        postService.unlike(postId, user.getId());
         return ResponseEntity.ok(Map.of("success", true));
     }
 
-    @PostMapping("/{id}/share")
-    public ResponseEntity<?> share(@PathVariable Long id) {
-        postService.share(id);
+    @PostMapping("/{postId}/share")
+    public ResponseEntity<Map<String, Boolean>> share(@PathVariable Long postId) {
+        postService.share(postId);
         return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getUserPosts(@PathVariable Long userId) {
+        return ResponseEntity.ok(postService.getPostsByUser(userId));
     }
 }

@@ -18,10 +18,7 @@ public class ReelController {
     private final ReelService reelService;
 
     @GetMapping("/feed")
-    public ResponseEntity<?> feed(
-            @RequestParam int page,
-            @RequestParam int limit
-    ) {
+    public ResponseEntity<?> feed(@RequestParam int page, @RequestParam int limit) {
         var reels = reelService.feed(page, limit);
 
         return ResponseEntity.ok(
@@ -35,20 +32,23 @@ public class ReelController {
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Reel reel) {
-        return ResponseEntity.ok(
-                Map.of("success", true, "reel", reelService.create(reel))
-        );
+        return ResponseEntity.ok(Map.of("success", true, "reel", reelService.create(reel)));
     }
 
     @PostMapping("/{id}/like")
-    public ResponseEntity<?> like(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Boolean>> like(@PathVariable Long id) {
         reelService.like(id);
         return ResponseEntity.ok(Map.of("success", true));
     }
 
     @DeleteMapping("/{id}/like")
-    public ResponseEntity<?> unlike(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Boolean>> unlike(@PathVariable Long id) {
         reelService.unlike(id);
         return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getUserReels(@PathVariable Long userId) {
+        return ResponseEntity.ok(reelService.getReelsByUser(userId));
     }
 }
