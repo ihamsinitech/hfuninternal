@@ -4,8 +4,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
 @Data
@@ -28,11 +28,9 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    // registration date / signup flag
     @Column(nullable = false)
-    private String confirmPassword;
-
-    @Column(nullable = false)
-    private String signup; // registration date as string
+    private String signup;
 
     @Column(nullable = false)
     private String fullName;
@@ -41,22 +39,21 @@ public class User {
 
     private String bio;
 
-    // Example of bi-directional relationship: posts
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    @JsonIgnore // prevents infinite recursion when serializing
+    // ===== Relationships =====
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Post> posts;
 
-    // Followers / Following (if using Follow entity)
-    @OneToMany(mappedBy = "follower", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "follower", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<Follow> following;
 
-    @OneToMany(mappedBy = "following", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "following", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<Follow> followers;
 
-    // Blocked users (if using Block entity)
-    @OneToMany(mappedBy = "blockedBy", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "blockedBy", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     private List<Block> blockedUsers;
 }
