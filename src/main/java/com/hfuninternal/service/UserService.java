@@ -1,10 +1,17 @@
 package com.hfuninternal.service;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
 
+import com.hfuninternal.dto.UserDto;
+import com.hfuninternal.model.Follow;
 import com.hfuninternal.model.User;
+import com.hfuninternal.repository.FollowRepository;
 import com.hfuninternal.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -14,76 +21,118 @@ import lombok.RequiredArgsConstructor;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final FollowRepository followRepository;
 
-    // ===============================
-    // Get logged-in user from JWT
-    // ===============================
+    // Get logged-in user
     public User getCurrentUser() {
-        System.out.println("=== UserService.getCurrentUser() ===");
-
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated()) {
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
             throw new RuntimeException("User not authenticated");
         }
 
         Object principal = auth.getPrincipal();
+        if (principal instanceof User) return (User) principal;
 
-        // ✅ JWT Filter sets User object directly
-        if (principal instanceof User) {
-            return (User) principal;
-        }
-
-        // 🔁 Fallback (safe)
-        String email = auth.getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found: " + email));
+        return userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new RuntimeException("User not found: " + auth.getName()));
     }
 
-    // ===============================
-    // Get user profile by ID
-    // ===============================
+    // Get any user's profile
     public User getUserProfile(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
-    // ===============================
-    // Update profile (SAFE MERGE)
-    // ===============================
-    public User updateProfile(User currentUser, User updated) {
+    // Follow a user
+    @Transactional
+    public UserDto followUser(Long targetUserId) {
+        User currentUser = getCurrentUser();
+        User targetUser = getUserProfile(targetUserId);
 
-        // 🔒 DO NOT overwrite required fields with null
-
-        if (updated.getFullName() != null && !updated.getFullName().isBlank()) {
-            currentUser.setFullName(updated.getFullName());
+        boolean alreadyFollowing = followRepository.existsByFollower_IdAndFollowing_Id(currentUser.getId(), targetUser.getId());
+        if (!alreadyFollowing) {
+            Follow follow = new Follow();
+            follow.setFollower(currentUser);
+            follow.setFollowing(targetUser);
+            followRepository.save(follow);
         }
 
-        if (updated.getBio() != null) {
-            currentUser.setBio(updated.getBio());
-        }
-
-        if (updated.getProfilePictureUrl() != null) {
-            currentUser.setProfilePictureUrl(updated.getProfilePictureUrl());
-        }
-
-        if (updated.getUsername() != null && !updated.getUsername().isBlank()) {
-            currentUser.setUsername(updated.getUsername());
-        }
-
-        // ❌ NEVER TOUCH THESE
-        // email
-        // password
-        // confirmPassword
-        // signup
-
-        return userRepository.save(currentUser);
+        return convertToDto(currentUser, targetUser);
     }
 
-    // ===============================
+    // Unfollow a user
+    @Transactional
+    public void unfollowUser(Long targetUserId) {
+        User currentUser = getCurrentUser();
+        User targetUser = getUserProfile(targetUserId);
+
+        followRepository.deleteByFollower_IdAndFollowing_Id(currentUser.getId(), targetUser.getId());
+    }
+
+    // Get followers as DTOs
+    @Transactional(readOnly = true)
+    public List<UserDto> getFollowers(Long userId) {
+        User currentUser = getCurrentUser();
+        User targetUser = getUserProfile(userId);
+
+        return followRepository.findByFollowing(targetUser).stream()
+                .map(f -> convertToDto(currentUser, f.getFollower()))
+                .collect(Collectors.toList());
+    }
+
+    // Get following as DTOs
+    @Transactional(readOnly = true)
+    public List<UserDto> getFollowing(Long userId) {
+        User currentUser = getCurrentUser();
+        User targetUser = getUserProfile(userId);
+
+        return followRepository.findByFollower(targetUser).stream()
+                .map(f -> convertToDto(currentUser, f.getFollowing()))
+                .collect(Collectors.toList());
+    }
+
+    // Convert User → UserDto
+    @Transactional(readOnly = true)
+    public UserDto convertToDto(User currentUser, User targetUser) {
+        UserDto dto = new UserDto();
+        dto.set_id(targetUser.getId());
+        dto.setUsername(targetUser.getUsername());
+        dto.setFullName(targetUser.getFullName());
+        dto.setBio(targetUser.getBio());
+        dto.setProfilePictureUrl(targetUser.getProfilePictureUrl());
+
+        boolean isFollowing = followRepository.existsByFollower_IdAndFollowing_Id(currentUser.getId(), targetUser.getId());
+        dto.setFollowing(isFollowing);
+
+        dto.setFollowerCount(followRepository.findByFollowing(targetUser).size());
+        dto.setFollowingCount(followRepository.findByFollower(targetUser).size());
+
+        return dto;
+    }
+
+    // Update profile
+    @Transactional
+    public UserDto updateProfile(User updated) {
+        User currentUser = getCurrentUser();
+
+        if (updated.getFullName() != null && !updated.getFullName().isBlank())
+            currentUser.setFullName(updated.getFullName());
+        if (updated.getBio() != null)
+            currentUser.setBio(updated.getBio());
+        if (updated.getProfilePictureUrl() != null)
+            currentUser.setProfilePictureUrl(updated.getProfilePictureUrl());
+        if (updated.getUsername() != null && !updated.getUsername().isBlank())
+            currentUser.setUsername(updated.getUsername());
+
+        userRepository.save(currentUser);
+
+        return convertToDto(currentUser, currentUser);
+    }
+
     // Update profile picture
-    // ===============================
-    public void updateProfilePicture(User currentUser, String url) {
+    @Transactional
+    public void updateProfilePicture(String url) {
+        User currentUser = getCurrentUser();
         currentUser.setProfilePictureUrl(url);
         userRepository.save(currentUser);
     }

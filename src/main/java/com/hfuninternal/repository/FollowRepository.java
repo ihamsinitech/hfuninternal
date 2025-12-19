@@ -10,16 +10,16 @@ import com.hfuninternal.model.User;
 
 public interface FollowRepository extends JpaRepository<Follow, Long> {
 
-    // follow check
+    // Check if a user is following another
     boolean existsByFollower_IdAndFollowing_Id(Long followerId, Long followingId);
 
-    // unfollow
+    // Unfollow
     @Transactional
     void deleteByFollower_IdAndFollowing_Id(Long followerId, Long followingId);
 
-    // ✅ users who follow this user
+    // Users who follow this user
     List<Follow> findByFollowing(User following);
 
-    // ✅ users this user is following
+    // Users this user is following
     List<Follow> findByFollower(User follower);
 }
