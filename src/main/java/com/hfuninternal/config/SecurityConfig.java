@@ -1,56 +1,56 @@
 package com.hfuninternal.config;
 
+import com.hfuninternal.security.JwtFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@RequiredArgsConstructor
 public class SecurityConfig {
 
-    @Bean
-    public BCryptPasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    private final JwtFilter jwtFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
             .csrf(csrf -> csrf.disable())
-            .cors(cors -> {}) // You can configure CORS properly if needed
+
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+
             .authorizeHttpRequests(auth -> auth
 
-                // ✅ PUBLIC APIs (no login needed)
+                // ✅ PUBLIC
                 .requestMatchers(
-                    "/api/auth/**",
-                    "/api/posts/feed",
-                    "/api/reels/feed",
-                    "/api/users/*/profile",
-                    "/api/users/*/posts",
-                    "/api/users/*/reels",
-                    "/api/users/*/highlights"
+                        "/api/auth/**",
+                        "/error"
                 ).permitAll()
 
-                // ✅ AUTHENTICATED APIs (login required)
+                // 🔐 PROTECTED
                 .requestMatchers(
-                    "/api/users/me",
-                    "/api/users/profile",
-                    "/api/users/upload-profile-picture",
-                    "/api/users/*/follow",
-                    "/api/users/*/unfollow",
-                    "/api/users/*/block",
-                    "/api/users/*/report",
-                    "/api/posts/*/like",
-                    "/api/posts/*/share",
-                    "/api/reels/*/like"
+                        "/api/users/**",
+                        "/api/posts/**"
                 ).authenticated()
 
-                // ❌ Everything else blocked
-                .anyRequest().denyAll()
-            );
+                .anyRequest().authenticated()
+            )
+
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }

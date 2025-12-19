@@ -8,33 +8,35 @@ import com.hfuninternal.repository.UserRepository;
 import com.hfuninternal.service.AuthService;
 
 import java.util.List;
+import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder; // <-- use interface
 
-    @Autowired
-    public AuthServiceImpl(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder) {
+    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public User register(RegisterRequest request) {
-        if (!request.getPassword().equals(request.getConfirmPassword()))
+        if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new BadRequestException("Password and Confirm Password do not match");
+        }
 
-        if (userRepository.findByEmail(request.getEmail()).isPresent())
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new BadRequestException("Email is already taken");
+        }
 
-        if (userRepository.findByUsername(request.getUsername()).isPresent())
+        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new BadRequestException("Username is already taken");
+        }
 
         User user = new User();
         user.setEmail(request.getEmail());
@@ -47,11 +49,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public User login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmailOrUsername())
-                .orElseThrow(() -> new BadRequestException("Invalid email or password"));
+        Optional<User> userOptional = userRepository.findByEmail(request.getEmailOrUsername());
+        if (userOptional.isEmpty()) {
+            userOptional = userRepository.findByUsername(request.getEmailOrUsername());
+        }
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
-            throw new BadRequestException("Invalid email or password");
+        User user = userOptional
+                .orElseThrow(() -> new BadRequestException("Invalid email/username or password"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BadRequestException("Invalid email/username or password");
+        }
 
         return user;
     }
@@ -66,10 +74,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("User with email " + email + " not found"));
 
-        // Simulate sending a password reset link
         System.out.println("Password reset link sent to: " + user.getEmail());
-
-        // In a real app, generate a token, save it in DB, and send email
     }
 
     @Override
@@ -79,10 +84,11 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new BadRequestException("User with email " + email + " not found"));
+                .orElseThrow(() -> new BadRequestException("User with email " + email + " not found"));
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+
+        System.out.println("Password reset for user: " + email);
     }
 }
