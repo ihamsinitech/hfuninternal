@@ -1,111 +1,60 @@
 package com.hfuninternal.controller;
 
-import com.hfuninternal.dto.*;
+import com.hfuninternal.dto.AuthDTO;  // FIXED: lowercase 'dto'
 import com.hfuninternal.model.User;
-import com.hfuninternal.security.JwtUtil;
-import com.hfuninternal.service.AuthService;
-
+import com.hfuninternal.security.jwt.JwtUtils;
+import com.hfuninternal.service.AuthService;  // Added
+import com.hfuninternal.service.UserService;
 import jakarta.validation.Valid;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
-
-    private static final Logger logger =
-            LoggerFactory.getLogger(AuthController.class);
-
-    private final AuthService authService;
-    private final JwtUtil jwtUtil;
-
-    public AuthController(AuthService authService, JwtUtil jwtUtil) {
-        this.authService = authService;
-        this.jwtUtil = jwtUtil;
-    }
-
-    // ✅ LOGIN
+    
+    private final AuthenticationManager authenticationManager;
+    private final JwtUtils jwtUtils;
+    private final UserService userService;
+    private final AuthService authService;  // Added
+    
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-
-        logger.info("Login attempt for {}", request.getEmailOrUsername());
-
-        User user = authService.login(request);
-
-        String token = jwtUtil.generateToken(user.getEmail());
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Login successful");
-        response.put("tokenType", "Bearer");
-        response.put("token", token);
-        response.put("userId", user.getId());
-        response.put("username", user.getUsername());
-        response.put("email", user.getEmail());
-
+    public ResponseEntity<?> login(@Valid @RequestBody AuthDTO.LoginRequest loginRequest) {
+        // Authenticate user
+        Authentication authentication = authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
+        );
+        
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String jwt = jwtUtils.generateJwtToken(authentication);
+        
+        User userDetails = (User) authentication.getPrincipal();
+        
+        AuthDTO.LoginResponse response = new AuthDTO.LoginResponse(
+            jwt,
+            userDetails.getId(),
+            userDetails.getEmail(),
+            userDetails.getUsername()
+        );
+        
         return ResponseEntity.ok(response);
     }
-
-    // ✅ REGISTER
+    
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
-        User user = authService.register(request);
-        return ResponseEntity.ok(
-                Map.of("message", "User registered", "userId", user.getId())
-        );
+    public ResponseEntity<?> register(@Valid @RequestBody AuthDTO.RegisterRequest registerRequest) {
+        User registeredUser = authService.register(registerRequest);
+        return ResponseEntity.ok().body("User registered successfully: " + registeredUser.getUsername());
     }
-
-    // ✅ GET USERS (ADMIN / INTERNAL)
-    @GetMapping("/users")
-    public ResponseEntity<?> getAllUsers() {
-        return ResponseEntity.ok(authService.getAllUsers());
-    }
-
-    // ✅ FORGOT PASSWORD
+    
     @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(
-            @RequestBody ForgotPasswordRequest request) {
-
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody AuthDTO.ForgotPasswordRequest request) {
         authService.forgotPassword(request.getEmail());
-        return ResponseEntity.ok(
-                Map.of("message", "Password reset link sent")
-        );
-    }
-
-    // ✅ RESET PASSWORD
-    @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(
-            @Valid @RequestBody ResetPasswordRequest request) {
-
-        authService.resetPassword(
-                request.getEmail(),
-                request.getNewPassword(),
-                request.getConfirmPassword()
-        );
-
-        return ResponseEntity.ok(
-                Map.of("message", "Password reset successful")
-        );
-    }
-
-    // ✅ TEST JWT (NO validateToken call)
-    @GetMapping("/test-token")
-    public ResponseEntity<?> testToken() {
-
-        String token = jwtUtil.generateToken("test@example.com");
-
-        return ResponseEntity.ok(
-                Map.of(
-                        "token", token,
-                        "extractedEmail", jwtUtil.extractEmail(token),
-                        "status", "JWT working"
-                )
-        );
+        return ResponseEntity.ok().body("Password reset email sent to " + request.getEmail());
     }
 }

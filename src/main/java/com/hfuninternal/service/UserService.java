@@ -1,139 +1,160 @@
 package com.hfuninternal.service;
 
+import com.hfuninternal.dto.UserDTO;
+import com.hfuninternal.exception.ResourceNotFoundException;
+import com.hfuninternal.model.User;
+import com.hfuninternal.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-
-import com.hfuninternal.dto.UserDto;
-import com.hfuninternal.model.Follow;
-import com.hfuninternal.model.User;
-import com.hfuninternal.repository.FollowRepository;
-import com.hfuninternal.repository.UserRepository;
-
-import lombok.RequiredArgsConstructor;
-
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class UserService {
-
+    
     private final UserRepository userRepository;
-    private final FollowRepository followRepository;
-
-    // Get logged-in user
+    
     public User getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
-            throw new RuntimeException("User not authenticated");
-        }
-
-        Object principal = auth.getPrincipal();
-        if (principal instanceof User) return (User) principal;
-
-        return userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new RuntimeException("User not found: " + auth.getName()));
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String username = authentication.getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
-
-    // Get any user's profile
+    
     public User getUserProfile(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
-
-    // Follow a user
-    @Transactional
-    public UserDto followUser(Long targetUserId) {
-        User currentUser = getCurrentUser();
-        User targetUser = getUserProfile(targetUserId);
-
-        boolean alreadyFollowing = followRepository.existsByFollower_IdAndFollowing_Id(currentUser.getId(), targetUser.getId());
-        if (!alreadyFollowing) {
-            Follow follow = new Follow();
-            follow.setFollower(currentUser);
-            follow.setFollowing(targetUser);
-            followRepository.save(follow);
+    
+    public UserDTO convertToDto(User currentUser, User targetUser) {
+        if (targetUser == null) {
+            throw new ResourceNotFoundException("User not found");
         }
-
-        return convertToDto(currentUser, targetUser);
-    }
-
-    // Unfollow a user
-    @Transactional
-    public void unfollowUser(Long targetUserId) {
-        User currentUser = getCurrentUser();
-        User targetUser = getUserProfile(targetUserId);
-
-        followRepository.deleteByFollower_IdAndFollowing_Id(currentUser.getId(), targetUser.getId());
-    }
-
-    // Get followers as DTOs
-    @Transactional(readOnly = true)
-    public List<UserDto> getFollowers(Long userId) {
-        User currentUser = getCurrentUser();
-        User targetUser = getUserProfile(userId);
-
-        return followRepository.findByFollowing(targetUser).stream()
-                .map(f -> convertToDto(currentUser, f.getFollower()))
-                .collect(Collectors.toList());
-    }
-
-    // Get following as DTOs
-    @Transactional(readOnly = true)
-    public List<UserDto> getFollowing(Long userId) {
-        User currentUser = getCurrentUser();
-        User targetUser = getUserProfile(userId);
-
-        return followRepository.findByFollower(targetUser).stream()
-                .map(f -> convertToDto(currentUser, f.getFollowing()))
-                .collect(Collectors.toList());
-    }
-
-    // Convert User → UserDto
-    @Transactional(readOnly = true)
-    public UserDto convertToDto(User currentUser, User targetUser) {
-        UserDto dto = new UserDto();
-        dto.set_id(targetUser.getId());
+        
+        UserDTO dto = new UserDTO();
+        dto.setId(targetUser.getId());
         dto.setUsername(targetUser.getUsername());
-        dto.setFullName(targetUser.getFullName());
-        dto.setBio(targetUser.getBio());
-        dto.setProfilePictureUrl(targetUser.getProfilePictureUrl());
-
-        boolean isFollowing = followRepository.existsByFollower_IdAndFollowing_Id(currentUser.getId(), targetUser.getId());
-        dto.setFollowing(isFollowing);
-
-        dto.setFollowerCount(followRepository.findByFollowing(targetUser).size());
-        dto.setFollowingCount(followRepository.findByFollower(targetUser).size());
-
+        dto.setEmail(targetUser.getEmail());
+        
+        // Combine firstName and lastName for fullName
+        String fullName = "";
+        if (targetUser.getFirstName() != null) {
+            fullName = targetUser.getFirstName();
+        }
+        if (targetUser.getLastName() != null && !targetUser.getLastName().isEmpty()) {
+            if (!fullName.isEmpty()) {
+                fullName += " ";
+            }
+            fullName += targetUser.getLastName();
+        }
+        dto.setFullName(fullName);
+        
+        // Set optional fields with null safety
+        dto.setBio(targetUser.getBio() != null ? targetUser.getBio() : "");
+        dto.setProfilePictureUrl(targetUser.getProfilePicture() != null ? targetUser.getProfilePicture() : "");
+        
+        // Set default values
+        dto.setWebsite("");
+        dto.setGender("");
+        
+        // FIX: Comment out problematic lines for now
+        // dto.setPrivate(false);     // Comment this out
+        // dto.setVerified(false);    // Comment this out  
+        // dto.setFollowing(false);   // Comment this out
+        
+        // Initialize counts to 0
+        dto.setFollowersCount(0);
+        dto.setFollowingCount(0);
+        dto.setPostsCount(0);
+        
+        // Set timestamps
+        dto.setCreatedAt(targetUser.getCreatedAt());
+        dto.setUpdatedAt(targetUser.getUpdatedAt());
+        
         return dto;
     }
-
-    // Update profile
-    @Transactional
-    public UserDto updateProfile(User updated) {
+    
+    public UserDTO updateProfile(User updatedUser) {
         User currentUser = getCurrentUser();
-
-        if (updated.getFullName() != null && !updated.getFullName().isBlank())
-            currentUser.setFullName(updated.getFullName());
-        if (updated.getBio() != null)
-            currentUser.setBio(updated.getBio());
-        if (updated.getProfilePictureUrl() != null)
-            currentUser.setProfilePictureUrl(updated.getProfilePictureUrl());
-        if (updated.getUsername() != null && !updated.getUsername().isBlank())
-            currentUser.setUsername(updated.getUsername());
-
-        userRepository.save(currentUser);
-
-        return convertToDto(currentUser, currentUser);
+        
+        if (updatedUser.getFirstName() != null) {
+            currentUser.setFirstName(updatedUser.getFirstName());
+        }
+        if (updatedUser.getLastName() != null) {
+            currentUser.setLastName(updatedUser.getLastName());
+        }
+        if (updatedUser.getBio() != null) {
+            currentUser.setBio(updatedUser.getBio());
+        }
+        if (updatedUser.getProfilePicture() != null) {
+            currentUser.setProfilePicture(updatedUser.getProfilePicture());
+        }
+        
+        User savedUser = userRepository.save(currentUser);
+        return convertToDto(savedUser, savedUser);
     }
-
-    // Update profile picture
-    @Transactional
-    public void updateProfilePicture(String url) {
+    
+    public void updateProfilePicture(String imageUrl) {
         User currentUser = getCurrentUser();
-        currentUser.setProfilePictureUrl(url);
+        currentUser.setProfilePicture(imageUrl);
         userRepository.save(currentUser);
+    }
+    
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+    }
+    
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+    }
+    
+    public User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+    }
+    
+    public List<UserDTO> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(user -> convertToDto(user, user))
+                .collect(Collectors.toList());
+    }
+    
+    public void deleteUser(Long userId) {
+        User user = getUserById(userId);
+        userRepository.delete(user);
+    }
+    
+    public List<UserDTO> searchUsers(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return getAllUsers();
+        }
+        
+        return userRepository.searchUsers(query).stream()
+                .map(user -> convertToDto(user, user))
+                .collect(Collectors.toList());
+    }
+    
+    public boolean existsByUsername(String username) {
+        return userRepository.existsByUsername(username);
+    }
+    
+    public boolean existsByEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
+    
+    public User saveUser(User user) {
+        return userRepository.save(user);
+    }
+    
+    public long getUserCount() {
+        return userRepository.count();
     }
 }

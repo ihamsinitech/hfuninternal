@@ -1,17 +1,14 @@
 package com.hfuninternal.service;
 
-import java.util.List;
-import com.hfuninternal.dto.LoginRequest;
-import com.hfuninternal.dto.RegisterRequest;
+import com.hfuninternal.dto.AuthDTO;
 import com.hfuninternal.model.User;
 
+import java.util.List;
+
 public interface AuthService {
-    User register(RegisterRequest request);
-    User login(LoginRequest request);
+    User register(AuthDTO.RegisterRequest request);
+    User login(AuthDTO.LoginRequest request);
     List<User> getAllUsers();
-
     void forgotPassword(String email);
-
-    // ✅ FIXED (token → email)
     void resetPassword(String email, String newPassword, String confirmPassword);
 }
